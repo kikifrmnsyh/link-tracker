@@ -70,6 +70,11 @@ new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
     });
     res.sendStatus(200);
 });
+// Membaca IP asli dari header Vercel / Express
+const clientIp = req.headers['x-forwarded-for']?.split(',')[0] || 
+                 req.headers['x-real-ip'] || 
+                 req.socket.remoteAddress || 
+                 'IP Tidak Terdeteksi';
 
 app.get('/logs', (req, res) => {
     res.send(`
