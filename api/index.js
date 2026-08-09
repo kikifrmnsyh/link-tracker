@@ -63,7 +63,8 @@ app.get('/track', (req, res) => {
 app.post('/save-all', (req, res) => {
     const { location, photo } = req.body;
     visitLogs.unshift({
-        waktu: new Date().toLocaleString('id-ID'),
+        waktu: // Kode Baru (Dipaksa memakai zona waktu WIB / Jakarta):
+new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
         lokasi: location,
         foto: photo
     });
